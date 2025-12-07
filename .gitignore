@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# Entornos
+venv/
+.antenv/
+.antenv*/
+env/
+
+# Azure / despliegue
+app.zip
+.azure/
+
+# Otros
+*.log
