@@ -4,7 +4,7 @@ import { Actor } from 'apify';
 // Actor Buscar Pisos
 // - Input: { ciudad, precio_max, for_rent }
 // - Llama a igolaizola/idealista-scraper con un input válido
-// - Devuelve el dataset de Idealista tal cual
+// - Devuelve como salida los pisos que devuelve Idealista
 //
 
 // 1) Inicializar actor
@@ -20,10 +20,10 @@ const forRent = input.for_rent || false;
 function buildIdealistaInput(ciudad, maxPrice, forRent) {
     return {
         maxItems: 50,
-        operation: forRent ? "rent" : "sale", // "sale" | "rent"
-        propertyType: "homes",                // en minúsculas
-        country: "es",                        // "es" | "pt" | "it"
-        // 👇 Estos campos los quiere como STRING
+        operation: forRent ? "rent" : "sale",   // "sale" | "rent"
+        propertyType: "homes",                  // en minúsculas
+        country: "es",                          // "es" | "pt" | "it"
+        // Estos campos deben ser STRING
         minPrice: "0",
         maxPrice: maxPrice ? String(maxPrice) : undefined,
         locationQuery: ciudad.toLowerCase()
@@ -39,13 +39,15 @@ const { defaultDatasetId } = await Actor.call(
     idealistaInput
 );
 
-console.log("📦 Dataset recibido:", defaultDatasetId);
+console.log("📦 Dataset recibido desde Idealista:", defaultDatasetId);
 
-// 5) Leer los datos del dataset
-const { items } = await Actor.getDatasetItems(defaultDatasetId);
+// 5) Abrir el dataset y obtener los datos
+const dataset = await Actor.openDataset(defaultDatasetId);
+const { items } = await dataset.getData();
+
 console.log(`✅ Recibidos ${items.length} pisos de Idealista`);
 
-// 6) Devolverlos como salida de este actor
+// 6) Devolver los pisos como salida de este actor
 if (items && items.length > 0) {
     await Actor.pushData(items);
 } else {
