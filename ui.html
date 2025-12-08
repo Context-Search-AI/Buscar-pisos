@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Buscador de pisos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+        }
+
+        input, button {
+            padding: 8px;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            gap: 15px;
+            max-width: 600px;
+        }
+
+        .card img {
+            width: 160px;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+
+        .card h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .card p {
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Buscador de pisos</h2>
+
+<div class="search-box">
+    Ciudad: <input id="ciudad" value="barcelona">
+    Precio máx: <input id="precio" value="500000">
+    <button onclick="buscar()">Buscar</button>
+</div>
+
+<div id="resultados"></div>
+
+<script>
+async function buscar() {
+    const ciudad = document.getElementById("ciudad").value;
+    const precio = document.getElementById("precio").value;
+
+    const res = await fetch(`/buscar?ciudad=${ciudad}&precio_max=${precio}`);
+    const data = await res.json();
+
+    const cont = document.getElementById("resultados");
+    cont.innerHTML = ""; // limpiar
+
+    data.pisos.forEach(p => {
+        const div = document.createElement("div");
+        div.className = "card";
+
+        div.innerHTML = `
+            <img src="${p.thumbnail || ''}">
+            <div>
+                <h3>${p.priceInfo.price.amount.toLocaleString()} €</h3>
+                <p><strong>${p.propertyType || ''}</strong> — ${p.size || 0} m² — ${p.rooms || 0} hab</p>
+                <p>${p.address || ''}</p>
+                <a href="${p.url}" target="_blank">Ver en Idealista</a>
+            </div>
+        `;
+
+        cont.appendChild(div);
+    });
+}
+</script>
+
+</body>
+</html>
