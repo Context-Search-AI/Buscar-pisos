@@ -1,64 +1,66 @@
 import { Actor } from 'apify';
 
 //
-// Actor Buscar Pisos
+// Actor: Buscar Pisos
 // - Input: { ciudad, precio_max, for_rent }
-// - Llama al actor igolaizola/idealista-scraper con filtros
-// - Devuelve el mismo dataset que ese actor
+// - Llama al actor igolaizola/idealista-scraper
+// - Devuelve como salida los mismos pisos que scrapea Idealista
 //
 
+// 1) Inicializar actor
 await Actor.init();
 
-// 1. Leer input
+// 2) Leer input con valores por defecto
 const input = await Actor.getInput() || {};
 const ciudad = input.ciudad || "madrid";
 const maxPrice = input.precio_max || 200000;
 const forRent = input.for_rent || false;
 
-// 2. Construir filtros para el actor de Idealista
+// 3) Construir el input para el actor de Idealista
 function buildIdealistaInput(ciudad, maxPrice, forRent) {
-    const operation = forRent ? "rent" : "sale";
+    const operation = forRent ? "rent" : "sale"; // "sale" o "rent"
 
     return {
-        // nº máximo de pisos
+        // nº máximo de inmuebles a traer
         maxItems: 50,
 
         // compra o alquiler
-        operation, // "sale" | "rent"
+        operation,             // "sale" | "rent"
 
-        // tipo de propiedad (dejamos el default de “Homes”)
-        propertyType: "Homes",
+        // tipo de propiedad (según el schema del actor: en minúsculas)
+        propertyType: "homes", // "homes", "newDevelopments", "offices", etc.
 
         // país
         country: "Spain",
 
-        // rango de precio
+        // rango de precios
         minPrice: 0,
-        maxPrice: maxPrice || undefined,
+        maxPrice: maxPrice,
 
-        // intentamos pasar la ciudad como texto de localización;
-        // si el actor no lo usa, simplemente la ignorará.
-        locationQuery: ciudad,
-
-        // otros filtros se quedan por defecto
+        // texto de localización (la ciudad)
+        locationQuery: ciudad
     };
 }
 
 const childInput = buildIdealistaInput(ciudad, maxPrice, forRent);
 console.log("🔎 Llamando a igolaizola/idealista-scraper con:", childInput);
 
-// 3. Llamar al actor de Idealista
-const { defaultDatasetId } = await Actor.call("igolaizola/idealista-scraper", childInput);
+// 4) Ejecutar el actor de Idealista
+const { defaultDatasetId } = await Actor.call(
+    "igolaizola/idealista-scraper",
+    childInput
+);
 
-// 4. Leer los resultados que ha scrapeado
+// 5) Leer los resultados del dataset que ha generado el scraper
 const { items } = await Actor.getDatasetItems(defaultDatasetId);
 console.log(`✅ Recibidos ${items.length} pisos de Idealista`);
 
-// 5. Devolverlos como salida de este actor
+// 6) Devolver los pisos como salida de este actor
 if (items && items.length > 0) {
     await Actor.pushData(items);
 } else {
     console.warn("No se encontraron pisos para la búsqueda dada.");
 }
 
+// 7) Finalizar
 await Actor.exit();
