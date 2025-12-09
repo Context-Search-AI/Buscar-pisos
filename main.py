@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 APIFY_TOKEN = os.getenv("APIFY_TOKEN")
-ACTOR_ID = os.getenv("APIFY_ACTOR_ID")  # p.ej. "igylo/idealista-scraper"
+ACTOR_ID = os.getenv("APIFY_ACTOR_ID")  # debe ser lukass~idealista-scraper
 
 app = FastAPI()
 
@@ -36,8 +36,8 @@ def parse_query(q: str) -> Dict[str, Any]:
       - ok: bool
       - missing: lista de cosas que faltan
       - location_query: texto de ubicación (ciudad/barrio/CP/calle)
-      - city: ciudad principal (para tu actor actual)
-      - price_max: presupuesto máximo (€)
+      - city: ciudad principal (para mostrar mensajes)
+      - price_max: presupuesto máximo (€) SOLO para mostrar
       - for_rent: True si parece alquiler
       - num_props: nº de viviendas deseadas (por defecto 5)
     """
@@ -53,7 +53,7 @@ def parse_query(q: str) -> Dict[str, Any]:
         except Exception:
             num_props = 5
 
-    # 2) Precio máximo
+    # 2) Precio máximo (no lo filtra el actor, pero lo mostramos)
     price_max = None
 
     # Formatos tipo "150 mil"
@@ -61,15 +61,10 @@ def parse_query(q: str) -> Dict[str, Any]:
     if m_mil:
         price_max = int(m_mil.group(1)) * 1000
     else:
-        # Tomamos el último número "grande" como presupuesto
         nums = [int(x) for x in re.findall(r"\d+", q_low)]
         if nums:
-            # Si hay números grandes, cogemos el mayor
             big_nums = [n for n in nums if n >= 5000]
-            if big_nums:
-                price_max = max(big_nums)
-            else:
-                price_max = nums[-1]
+            price_max = max(big_nums) if big_nums else nums[-1]
 
     if price_max is None:
         missing.append("presupuesto máximo (ej. 'por 300000 euros')")
@@ -86,7 +81,6 @@ def parse_query(q: str) -> Dict[str, Any]:
     # Intento 1: todo lo que hay después de " en "
     if " en " in q_low:
         after_en = q_low.split(" en ")[-1]
-        # Cortamos en " por ", " para ", " que ", etc.
         for cutter in [" por ", " para ", " que ", " y ", "."]:
             if cutter in after_en:
                 after_en = after_en.split(cutter)[0]
@@ -131,11 +125,10 @@ def parse_query(q: str) -> Dict[str, Any]:
         missing.append("ubicación (ciudad, barrio, código postal o calle)")
 
     if city is None and location_query:
-        # Tomamos la primera palabra de location_query como ciudad "fallback"
         city = location_query.split(",")[0].split()[0]
 
     if city is None:
-        city = "madrid"  # fallback robusto para tu actor actual
+        city = "madrid"  # fallback
 
     ok = len(missing) == 0
 
@@ -191,45 +184,57 @@ def buscar(q: str):
 
         yield f"🔍 Consulta: {q}\n"
         yield f"📍 Ubicación detectada: {location_query or ciudad}\n"
-        yield f"💶 Precio máximo: {precio_max} €\n"
+        yield f"💶 Precio máximo (orientativo): {precio_max} €\n"
         yield f"🏷 Tipo: {'Alquiler' if for_rent else 'Compra'}\n"
         yield f"📦 Nº de propiedades a buscar (TOP): {num_props}\n\n"
         yield "⏳ Lanzando búsqueda en Apify…\n"
 
+        # --------- AQUÍ adaptamos al actor lukass~idealista-scraper ----------
         run_input = {
-            # Campos que tu actor ya conoce
-            "ciudad": ciudad,
-            "precio_max": precio_max,
-            "for_rent": for_rent,
-            # Campos adicionales para hacerlo más flexible
-            "location_query": location_query,
-            "num_props": num_props,
+            "district": location_query or ciudad,
+            "country": "es",
+            "operation": "rent" if for_rent else "sale",
+            "propertyType": "homes",
+            "maxItems": max(num_props * 10, 20),  # rascamos de más y luego ordenamos
+            "endPage": 50,
+            "proxy": {
+                "useApifyProxy": True,
+                "apifyProxyGroups": ["RESIDENTIAL"],
+            },
+            "minSize": "any",
+            "maxSize": "any",
+            "bedrooms": [],
+            "bathrooms": [],
+            "homeType": [],
+            "condition": [],
+            "propertyStatus": [],
+            "floorHeights": [],
+            "features": [],
         }
+        # -------------------------------------------------------------------
 
-        # 1) Lanzar actor
         start_url = f"https://api.apify.com/v2/acts/{ACTOR_ID}/runs?token={APIFY_TOKEN}"
 
         try:
-            run_res = requests.post(start_url, json=run_input, timeout=30)
+            run_res = requests.post(start_url, json=run_input, timeout=60)
             run_res.raise_for_status()
             run = run_res.json()
         except Exception as e:
             yield f"❌ Error conectando con Apify: {repr(e)}\n"
             return
 
-        run_id = run.get("id") or run.get("data", {}).get("id")
+        run_id = run.get("data", {}).get("id") or run.get("id")
         if not run_id:
             yield f"❌ Apify no devolvió run_id. Respuesta: {run}\n"
             return
 
-        # 2) Polling de estado
         status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
         data = {}
         estado = "UNKNOWN"
 
-        for _ in range(60):  # ~90 segundos máximo (60 * 1.5s)
+        for _ in range(60):
             try:
-                status = requests.get(status_url, timeout=15).json()
+                status = requests.get(status_url, timeout=30).json()
             except Exception as e:
                 yield f"❌ Error consultando estado en Apify: {repr(e)}\n"
                 return
@@ -238,13 +243,13 @@ def buscar(q: str):
             estado = data.get("status") or status.get("status") or "UNKNOWN"
             yield f"⏳ Buscando pisos en {location_query or ciudad.capitalize()}… Estado: {estado}\n"
 
-            if estado in ["SUCCEEDED", "FAILED"]:
+            if estado in ["SUCCEEDED", "FAILED", "ABORTED", "TIMING_OUT"]:
                 break
 
             time.sleep(1.5)
 
-        if estado == "FAILED":
-            yield "❌ La ejecución en Apify ha fallado.\n"
+        if estado != "SUCCEEDED":
+            yield f"❌ La ejecución en Apify ha terminado con estado: {estado}.\n"
             return
 
         dataset_id = data.get("defaultDatasetId") or status.get("defaultDatasetId")
@@ -252,7 +257,6 @@ def buscar(q: str):
             yield f"❌ No se encontró dataset_id en la respuesta de Apify: {status}\n"
             return
 
-        # 3) Obtener items del dataset
         items_url = (
             f"https://api.apify.com/v2/datasets/{dataset_id}/items"
             f"?clean=true&token={APIFY_TOKEN}"
@@ -267,18 +271,12 @@ def buscar(q: str):
             yield "⚠️ No se encontraron pisos para esta búsqueda.\n"
             return
 
-        # 4) TOP N por precio
+        # 4) TOP N por precio (campo 'price')
         def extraer_precio(p):
             try:
-                if "precio" in p:
-                    return float(p["precio"])
-                if "priceInfo" in p:
-                    return float(p["priceInfo"]["price"]["amount"])
-                if "price" in p:
-                    return float(p["price"])
+                return float(p.get("price"))
             except Exception:
-                pass
-            return 9_999_999_999
+                return 9_999_999_999
 
         items_ordenados = sorted(items, key=extraer_precio)
         top = items_ordenados[: max(num_props, 1)]
@@ -288,51 +286,23 @@ def buscar(q: str):
         for i, piso in enumerate(top, start=1):
             precio = extraer_precio(piso)
 
-            # Dirección / zona
-            direccion = (
-                piso.get("address")
-                or piso.get("fullAddress")
-                or piso.get("neighborhood")
-                or piso.get("district")
-                or piso.get("zona")
-                or "Dirección no especificada"
-            )
+            direccion = piso.get("address") or "Dirección no especificada"
+            url = piso.get("url") or "Sin enlace"
 
-            # Link
-            url = piso.get("url") or piso.get("link") or "Sin enlace"
-
-            # Foto
-            foto = (
-                piso.get("image")
-                or piso.get("imageUrl")
-                or (piso.get("images") or [{}])[0].get("url")
-                if isinstance(piso.get("images"), list)
-                else None
-            )
-            if not foto:
+            fotos = piso.get("photos") or []
+            if isinstance(fotos, list) and fotos:
+                foto = fotos[0].get("url") or "Sin foto disponible"
+            else:
                 foto = "Sin foto disponible"
 
-            # Descripción / área
-            area = (
-                piso.get("neighborhood")
-                or piso.get("district")
-                or piso.get("municipality")
-                or piso.get("city")
-                or ciudad.capitalize()
-            )
-            descripcion = piso.get("description") or piso.get("titulo") or ""
-            if descripcion:
-                descripcion_corta = (descripcion[:260] + "…") if len(descripcion) > 260 else descripcion
-            else:
-                descripcion_corta = "Sin descripción detallada en el anuncio."
+            area = piso.get("typology") or ciudad.capitalize()
+            descripcion_corta = piso.get("title") or "Sin descripción detallada."
 
             # Estimación de alquiler si es compra
             alquiler_estimado = None
             if not for_rent and precio and precio < 9_000_000_000:
-                # Regla sencilla: 4% bruto anual
                 alquiler_estimado = int(precio * 0.04 / 12)
 
-            # Operación
             tipo_operacion = "Alquiler" if for_rent else "Compra"
 
             yield f"\n{i}. Propiedad\n"
@@ -341,7 +311,7 @@ def buscar(q: str):
             yield f"   💶 Total: {precio:,.0f} €\n"
             yield f"   🔗 Link: {url}\n"
             yield f"   🖼 Foto: {foto}\n"
-            yield f"   📌 Área: {area}\n"
+            yield f"   📌 Tipo: {area}\n"
             yield f"   📝 Resumen: {descripcion_corta}\n"
 
             if alquiler_estimado is not None:
@@ -358,4 +328,4 @@ def buscar(q: str):
 # -------------------------------------------------
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "actor_id": ACTOR_ID}
