@@ -1,12 +1,10 @@
 import os
 import re
-import time
-import json
-from typing import Dict, Any, Optional, List
-
 import requests
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from typing import Dict, Any, List
+
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -16,57 +14,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 APIFY_TOKEN = os.getenv("APIFY_TOKEN")
-ACTOR_ID = os.getenv("APIFY_ACTOR_ID")  # p.ej. lukass~idealista-scraper
+ACTOR_ID = os.getenv("APIFY_ACTOR_ID")  # p.ej. "lukass~idealista-scraper"
 
-# Archivo local para guardar los prompts personalizados
-PROMPTS_FILE = "prompts.json"
-
-DEFAULT_ASSISTANT_PROMPT = (
-    "Eres un asesor inmobiliario experto. Explica al usuario de forma clara, honesta y cercana "
-    "lo que has entendido de su búsqueda (ubicación, presupuesto, tipo de operación y número de pisos) "
-    "y qué vas a hacer para encontrar las mejores oportunidades calidad/precio."
-)
-
-DEFAULT_SUMMARY_PROMPT = (
-    "Cierra la respuesta con un breve resumen de la zona y del rango de precios, y da 2–3 "
-    "consejos accionables para tomar decisión o afinar la búsqueda (por ejemplo: ampliar zona, "
-    "ajustar presupuesto o considerar viviendas para reformar)."
-)
-
-# -------------------------------------------------
-# Utilidades de prompts
-# -------------------------------------------------
-def load_prompts() -> Dict[str, str]:
-    """Carga los prompts desde fichero o devuelve los valores por defecto."""
-    if os.path.exists(PROMPTS_FILE):
-        try:
-            with open(PROMPTS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return {
-                    "assistant_prompt": data.get("assistant_prompt", DEFAULT_ASSISTANT_PROMPT),
-                    "summary_prompt": data.get("summary_prompt", DEFAULT_SUMMARY_PROMPT),
-                }
-        except Exception:
-            pass
-
-    return {
-        "assistant_prompt": DEFAULT_ASSISTANT_PROMPT,
-        "summary_prompt": DEFAULT_SUMMARY_PROMPT,
-    }
-
-
-def save_prompts(assistant_prompt: str, summary_prompt: str) -> None:
-    data = {
-        "assistant_prompt": assistant_prompt or DEFAULT_ASSISTANT_PROMPT,
-        "summary_prompt": summary_prompt or DEFAULT_SUMMARY_PROMPT,
-    }
-    with open(PROMPTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-# -------------------------------------------------
-# App FastAPI
-# -------------------------------------------------
 app = FastAPI()
 
 app.add_middleware(
@@ -103,16 +52,15 @@ def parse_query(q: str) -> Dict[str, Any]:
             num_props = 5
 
     # 2) Precio máximo
-    price_max: Optional[int] = None
+    price_max = None
 
-    # Formatos tipo "300000 mil" (mal escrito) o "300 mil"
+    # Formatos tipo "150 mil"
     m_mil = re.search(r"(\d+)\s*mil", q_low)
     if m_mil:
         price_max = int(m_mil.group(1)) * 1000
     else:
         nums = [int(x) for x in re.findall(r"\d+", q_low)]
         if nums:
-            # descartamos números muy pequeños (habitaciones, etc.)
             big_nums = [n for n in nums if n >= 5000]
             price_max = max(big_nums) if big_nums else nums[-1]
 
@@ -122,16 +70,16 @@ def parse_query(q: str) -> Dict[str, Any]:
     # 3) Compra o alquiler
     for_rent = any(
         x in q_low
-        for x in ["alquiler", "alquilar", "renta", "renting", "alquil", "arrendar"]
+        for x in ["alquiler", "alquilar", "renta", "renting", "alquilarla", "alquilarlos"]
     )
 
     # 4) Ubicación / ciudad
-    location_query: Optional[str] = None
+    location_query = None
 
     # Intento 1: todo lo que hay después de " en "
     if " en " in q_low:
         after_en = q_low.split(" en ")[-1]
-        for cutter in [" por ", " para ", " que ", " y ", ".", ","]:
+        for cutter in [" por ", " para ", " que ", " y ", "."]:
             if cutter in after_en:
                 after_en = after_en.split(cutter)[0]
         location_query = after_en.strip(" ,.")
@@ -157,7 +105,7 @@ def parse_query(q: str) -> Dict[str, Any]:
         "donostia",
         "san sebastian",
     ]
-    city: Optional[str] = None
+    city = None
     for c in ciudades:
         if c in q_low:
             city = c
@@ -192,65 +140,6 @@ def parse_query(q: str) -> Dict[str, Any]:
         "num_props": num_props,
     }
 
-
-# -------------------------------------------------
-# Helpers de Idealista
-# -------------------------------------------------
-def get_price(p: dict) -> Optional[float]:
-    """
-    Devuelve el precio real del piso sin importar el formato, o None si no existe.
-    Idealista puede devolver precios en distintos campos.
-    """
-
-    # 1) Campo normal numérico
-    if "price" in p and isinstance(p["price"], (int, float)):
-        try:
-            return float(p["price"])
-        except Exception:
-            pass
-
-    # 2) price como texto tipo "439.000 €"
-    if "price" in p and isinstance(p["price"], str):
-        numbers = re.findall(r"\d+", p["price"])
-        if numbers:
-            try:
-                return float("".join(numbers))
-            except Exception:
-                pass
-
-    # 3) priceValue
-    if "priceValue" in p:
-        try:
-            return float(p["priceValue"])
-        except Exception:
-            pass
-
-    # 4) priceInfo.amount
-    try:
-        val = p.get("priceInfo", {}).get("amount")
-        if val:
-            return float(val)
-    except Exception:
-        pass
-
-    # 5) operationPrice.buy.amount
-    try:
-        val = p.get("operationPrice", {}).get("buy", {}).get("amount")
-        if val:
-            return float(val)
-    except Exception:
-        pass
-
-    # 6) totalPrice
-    if "totalPrice" in p:
-        try:
-            return float(p["totalPrice"])
-        except Exception:
-            pass
-
-    return None
-
-
 # -------------------------------------------------
 # Rutas de UI estática
 # -------------------------------------------------
@@ -258,64 +147,100 @@ def get_price(p: dict) -> Optional[float]:
 def ui():
     return FileResponse("ui.html")
 
+# -------------------------------------------------
+# Utilidades de negocio
+# -------------------------------------------------
+def safe_price(piso: Dict[str, Any]) -> int:
+    try:
+        return int(piso.get("price"))
+    except Exception:
+        return -1
+
+def build_intro(info: Dict[str, Any], rango_min: int | None, rango_max: int | None) -> str:
+    ciudad = info["city"]
+    price_max = info.get("price_max")
+    num_props = info.get("num_props", 5)
+    for_rent = info.get("for_rent", False)
+
+    tipo_op = "alquiler" if for_rent else "compra"
+
+    linea_presu = (
+        f"Presupuesto máximo aproximado: {price_max:,} €"
+        if price_max
+        else "Presupuesto máximo no indicado con claridad."
+    )
+
+    linea_rango = ""
+    if rango_min is not None and rango_max is not None:
+        linea_rango = (
+            f"\nHe filtrado los anuncios para quedarme con los que están entre "
+            f"~{rango_min:,} € y ~{rango_max:,} € (entre -30% y +20% de tu presupuesto)."
+        )
+
+    intro = (
+        "Eres un asesor inmobiliario experto. Explica al usuario qué has entendido de su búsqueda "
+        "(ubicación, presupuesto, tipo de operación, nº de pisos) y qué vas a hacer para encontrar las mejores "
+        "oportunidades calidad/precio.\n\n"
+        "He entendido lo siguiente de tu búsqueda:\n"
+        f"• Zona principal: {ciudad}\n"
+        f"• Operación: {tipo_op}\n"
+        f"• {linea_presu}\n"
+        f"• Nº de propiedades a mostrar: TOP {num_props}\n"
+        f"{linea_rango}\n\n"
+        "Ahora voy a analizar anuncios reales de Idealista y quedarme con las mejores oportunidades calidad/precio para ti."
+    )
+
+    return intro
 
 # -------------------------------------------------
-# API de prompts (para el panel de configuración)
-# -------------------------------------------------
-@app.get("/prompts")
-def get_prompts():
-    return load_prompts()
-
-
-@app.post("/prompts")
-def update_prompts(body: Dict[str, str]):
-    assistant_prompt = body.get("assistant_prompt", "").strip()
-    summary_prompt = body.get("summary_prompt", "").strip()
-    save_prompts(assistant_prompt, summary_prompt)
-    return {"status": "ok"}
-
-
-# -------------------------------------------------
-# Endpoint principal /buscar (JSON para la UI tipo chat)
+# Endpoint principal /buscar
 # -------------------------------------------------
 @app.get("/buscar")
 def buscar(q: str):
+    # Comprobación de variables de entorno
     if not APIFY_TOKEN or not ACTOR_ID:
-        raise HTTPException(
+        return JSONResponse(
             status_code=500,
-            detail="Faltan APIFY_TOKEN o APIFY_ACTOR_ID en las variables de entorno.",
+            content={
+                "error": "Faltan APIFY_TOKEN o APIFY_ACTOR_ID en las variables de entorno."
+            },
         )
 
     info = parse_query(q)
 
     if not info["ok"]:
-        return {
-            "error": "missing_info",
-            "missing": info["missing"],
-            "examples": [
-                "Busca 5 pisos para comprar en Legazpi, Madrid por 300000 euros",
-                "Quiero 3 pisos en código postal 28005 para alquilar por 150 mil",
-            ],
-        }
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "Falta información en la consulta.",
+                "missing": info["missing"],
+                "hint": (
+                    "Ejemplos:\n"
+                    "- 'Busca 5 pisos para comprar en Legazpi, Madrid por 300000 euros'\n"
+                    "- 'Quiero 3 pisos en código postal 28005 para alquilar por 150 mil'\n"
+                ),
+            },
+        )
 
     ciudad = info["city"]
-    precio_max = info["price_max"]
+    price_max = info["price_max"]
     for_rent = info["for_rent"]
-    location_query = info["location_query"] or ciudad
+    location_query = info["location_query"]
     num_props = info["num_props"]
 
-    # Rango de precios permitido: -30% / +20%
-    price_anchor = float(precio_max)
-    price_min = price_anchor * 0.70
-    price_max_allowed = price_anchor * 1.20
+    # Rango de precios [-30%, +20%]
+    rango_min = rango_max = None
+    if price_max:
+        rango_min = int(price_max * 0.7)
+        rango_max = int(price_max * 1.2)
 
-    # --------- Llamada al actor de Apify ----------
+    # --------- Llamada al actor lukass~idealista-scraper (sincronamente) ----------
     run_input = {
-        "district": location_query,
+        "district": location_query or ciudad,
         "country": "es",
         "operation": "rent" if for_rent else "sale",
         "propertyType": "homes",
-        "maxItems": max(num_props * 30, 60),  # pedimos muchos y luego filtramos
+        "maxItems": 150,
         "endPage": 50,
         "proxy": {
             "useApifyProxy": True,
@@ -332,137 +257,51 @@ def buscar(q: str):
         "features": [],
     }
 
-    start_url = f"https://api.apify.com/v2/acts/{ACTOR_ID}/runs?token={APIFY_TOKEN}"
-
-    try:
-        run_res = requests.post(start_url, json=run_input, timeout=60)
-        run_res.raise_for_status()
-        run = run_res.json()
-    except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Error conectando con Apify: {repr(e)}",
-        )
-
-    run_id = run.get("data", {}).get("id") or run.get("id")
-    if not run_id:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Apify no devolvió run_id. Respuesta: {run}",
-        )
-
-    status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
-    data: Dict[str, Any] = {}
-    estado = "UNKNOWN"
-
-    # Polling del estado (sin enviar mensajes al usuario, solo logs)
-    for _ in range(60):
-        try:
-            status = requests.get(status_url, timeout=30).json()
-        except Exception as e:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Error consultando estado en Apify: {repr(e)}",
-            )
-
-        data = status.get("data", {})
-        estado = data.get("status") or status.get("status") or "UNKNOWN"
-        print(f"[Apify] Estado run {run_id}: {estado}")
-
-        if estado in ["SUCCEEDED", "FAILED", "ABORTED", "TIMING_OUT"]:
-            break
-
-        time.sleep(1.5)
-
-    if estado != "SUCCEEDED":
-        raise HTTPException(
-            status_code=502,
-            detail=f"La ejecución en Apify ha terminado con estado: {estado}.",
-        )
-
-    dataset_id = data.get("defaultDatasetId") or status.get("defaultDatasetId")
-    if not dataset_id:
-        raise HTTPException(
-            status_code=502,
-            detail=f"No se encontró dataset_id en la respuesta de Apify: {status}",
-        )
-
-    items_url = (
-        f"https://api.apify.com/v2/datasets/{dataset_id}/items"
-        f"?clean=true&token={APIFY_TOKEN}"
+    apify_url = (
+        f"https://api.apify.com/v2/acts/{ACTOR_ID}/run-sync-get-dataset-items"
+        f"?token={APIFY_TOKEN}"
     )
+
     try:
-        items = requests.get(items_url, timeout=60).json()
+        resp = requests.post(apify_url, json=run_input, timeout=300)
+        resp.raise_for_status()
+        items = resp.json()
     except Exception as e:
-        raise HTTPException(
+        return JSONResponse(
             status_code=502,
-            detail=f"Error descargando resultados del dataset: {repr(e)}",
+            content={"error": f"Error llamando a Apify: {repr(e)}"},
         )
 
     if not isinstance(items, list) or not items:
-        return {
-            "intro": "He revisado Idealista pero no he encontrado pisos para esta búsqueda.",
-            "properties": [],
-            "summary": "Prueba cambiando la zona, el presupuesto o el tipo de operación.",
-            "meta": {
-                "city": ciudad,
-                "location_query": location_query,
-                "price_max": precio_max,
-                "for_rent": for_rent,
-                "num_props": num_props,
-                "price_min": price_min,
-                "price_max_allowed": price_max_allowed,
-            },
-        }
+        return JSONResponse(
+            status_code=404,
+            content={"error": "No se encontraron pisos para esta búsqueda."},
+        )
 
-    # -------------------------------------------------
-    # Filtrado estricto por precio (-30% / +20%)
-    # -------------------------------------------------
-    valid_items: List[dict] = []
-    for p in items:
-        precio = get_price(p)
-        if precio is None:
-            continue
+    # 1) Solo pisos con precio válido
+    con_precio = [p for p in items if safe_price(p) > 0]
+    if not con_precio:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "No se encontraron pisos con precio válido."},
+        )
 
-        if precio < price_min or precio > price_max_allowed:
-            continue
+    # 2) Filtramos por banda de precio [-30%, +20%]
+    candidatos = con_precio
+    if rango_min is not None and rango_max is not None:
+        banda = [p for p in con_precio if rango_min <= safe_price(p) <= rango_max]
+        if banda:
+            candidatos = banda
 
-        valid_items.append(p)
+    # 3) Orden por precio (más baratos primero)
+    candidatos_ordenados = sorted(candidatos, key=safe_price)
 
-    if not valid_items:
-        return {
-            "intro": (
-                "He analizado los anuncios de Idealista para tu búsqueda, pero no hay pisos "
-                f"en {ciudad.capitalize()} dentro del rango de precios entre "
-                f"{price_min:,.0f} € y {price_max_allowed:,.0f} €."
-            ),
-            "properties": [],
-            "summary": (
-                "Prueba aumentando ligeramente el presupuesto máximo, ampliando la zona buscada "
-                "o incluyendo viviendas para reformar. "
-                "Puedes ajustar tu frase y vuelvo a buscar por ti."
-            ),
-            "meta": {
-                "city": ciudad,
-                "location_query": location_query,
-                "price_max": precio_max,
-                "for_rent": for_rent,
-                "num_props": num_props,
-                "price_min": price_min,
-                "price_max_allowed": price_max_allowed,
-            },
-        }
+    # 4) TOP N
+    top = candidatos_ordenados[: max(num_props, 1)]
 
-    # Ordenar por precio (menor a mayor)
-    valid_items.sort(key=lambda x: get_price(x) or 0.0)
-
-    # TOP N
-    top = valid_items[: max(num_props, 1)]
-
-    properties: List[dict] = []
+    propiedades_salida = []
     for i, piso in enumerate(top, start=1):
-        precio = get_price(piso)
-
+        precio = safe_price(piso)
         direccion = piso.get("address") or "Dirección no especificada"
         url = piso.get("url") or ""
         fotos = piso.get("photos") or []
@@ -470,66 +309,51 @@ def buscar(q: str):
             foto = fotos[0].get("url") or ""
         else:
             foto = ""
-
-        typology = piso.get("typology") or "Propiedad"
+        typology = piso.get("typology") or "vivienda"
         title = piso.get("title") or f"{typology.capitalize()} en {direccion}"
 
-        alquiler_estimado: Optional[int] = None
-        if not for_rent and precio:
-            alquiler_estimado = int(precio * 0.04 / 12)
+        rent_estimate = None
+        if not for_rent and precio > 0:
+            rent_estimate = int(precio * 0.04 / 12)
 
-        properties.append(
+        propiedades_salida.append(
             {
                 "rank": i,
+                "title": title,
                 "address": direccion,
-                "operation": "Alquiler" if for_rent else "Compra",
                 "price": precio,
                 "url": url,
                 "photo": foto,
+                "operation": "Alquiler" if for_rent else "Compra",
                 "typology": typology,
-                "title": title,
-                "rent_estimate": alquiler_estimado,
+                "rent_estimate": rent_estimate,
             }
         )
 
-    prompts = load_prompts()
-    assistant_prompt = prompts["assistant_prompt"]
-    summary_prompt = prompts["summary_prompt"]
-
-    price_max_str = f"{precio_max:,.0f} €"
-    intro = (
-        f"{assistant_prompt}\n\n"
-        f"He entendido lo siguiente de tu búsqueda:\n"
-        f"- Zona principal: {ciudad.capitalize()}\n"
-        f"- Operación: {'alquiler' if for_rent else 'compra'}\n"
-        f"- Presupuesto máximo aproximado: {price_max_str}\n"
-        f"- Nº de propiedades a mostrar: TOP {num_props}\n\n"
-        "Ahora voy a analizar anuncios reales de Idealista y quedarme con las mejores "
-        "oportunidades calidad/precio para ti."
-    )
-
-    summary = (
-        f"En resumen, he encontrado {len(properties)} opciones en la zona de "
-        f"{ciudad.capitalize()} dentro del rango de precios entre "
-        f"{price_min:,.0f} € y {price_max_allowed:,.0f} €.\n\n"
-        f"{summary_prompt}"
-    )
-
-    return {
-        "intro": intro,
-        "properties": properties,
-        "summary": summary,
-        "meta": {
-            "city": ciudad,
-            "location_query": location_query,
-            "price_max": precio_max,
-            "for_rent": for_rent,
-            "num_props": num_props,
-            "price_min": price_min,
-            "price_max_allowed": price_max_allowed,
-        },
+    precios_top = [p["price"] for p in propiedades_salida if p["price"] > 0]
+    meta = {
+        "city": ciudad,
+        "location_query": location_query,
+        "price_max": price_max,
+        "price_band_min": rango_min,
+        "price_band_max": rango_max,
+        "found_min_price": min(precios_top) if precios_top else None,
+        "found_max_price": max(precios_top) if precios_top else None,
+        "for_rent": for_rent,
+        "num_props": num_props,
+        "total_scraped": len(items),
+        "total_candidates": len(candidatos),
     }
 
+    intro = build_intro(info, rango_min, rango_max)
+
+    return JSONResponse(
+        content={
+            "intro": intro,
+            "properties": propiedades_salida,
+            "meta": meta,
+        }
+    )
 
 # -------------------------------------------------
 # Healthcheck para Azure
