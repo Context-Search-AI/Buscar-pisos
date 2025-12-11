@@ -6,546 +6,339 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <style>
-    :root {
-      --bg: #f5f5f5;
-      --card: #ffffff;
-      --accent: #006CFF;
-      --accent-soft: rgba(0,108,255,0.12);
-      --border: #e0e0e0;
-      --ink: #111111;
-      --muted: #555555;
-      --radius-lg: 20px;
-      --radius-pill: 999px;
-    }
-
-    * { box-sizing: border-box; }
-
     body {
       margin: 0;
-      padding: 32px 12px 40px;
+      padding: 0;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg);
-      color: var(--ink);
-      display: flex;
-      justify-content: center;
+      background: #f5f5f5;
+      color: #111;
     }
 
-    .wrap {
-      width: 100%;
+    .container {
       max-width: 1100px;
+      margin: auto;
+      padding: 32px 16px;
     }
 
     h1 {
-      margin: 0 0 8px;
-      font-size: 30px;
+      margin-top: 0;
+      font-size: 36px;
+      font-weight: 700;
     }
 
     .subtitle {
-      margin: 0 0 18px;
-      font-size: 14px;
-      color: var(--muted);
+      margin-bottom: 24px;
+      color: #555;
+      font-size: 16px;
     }
 
-    /* Caja de búsqueda */
+    /* Search box */
     .search-box {
-      background: var(--card);
-      padding: 20px 20px 18px;
-      border-radius: var(--radius-lg);
+      background: #fff;
+      padding: 24px;
+      border-radius: 20px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.06);
-      margin-bottom: 16px;
+      margin-bottom: 24px;
     }
 
-    textarea#q {
+    textarea {
       width: 100%;
       min-height: 70px;
-      max-height: 180px;
-      padding: 14px 18px;
-      border-radius: var(--radius-pill);
+      border-radius: 999px;
       border: 1px solid #ddd;
-      font-size: 15px;
+      padding: 18px 22px;
       resize: vertical;
+      font-size: 16px;
       outline: none;
+      box-sizing: border-box;
     }
 
-    textarea#q:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px var(--accent-soft);
+    textarea:focus {
+      border-color: #006CFF;
+      box-shadow: 0 0 0 2px rgba(0,108,255,0.2);
     }
 
     .actions {
-      margin-top: 12px;
+      margin-top: 16px;
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 12px;
       flex-wrap: wrap;
     }
 
     button.primary {
-      background: var(--accent);
-      color: #fff;
+      background: #006CFF;
+      color: white;
       border: none;
-      border-radius: var(--radius-pill);
-      padding: 10px 24px;
-      font-size: 15px;
+      border-radius: 999px;
+      padding: 12px 32px;
+      font-size: 16px;
       font-weight: 600;
       cursor: pointer;
     }
-    button.primary:hover { opacity: 0.94; }
+
+    button.primary:hover {
+      opacity: 0.94;
+    }
+
+    button.config-btn {
+      background: #eee;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 18px;
+      cursor: pointer;
+      font-size: 14px;
+    }
 
     /* Spinner */
     #spinner {
       display: none;
+      margin-left: 10px;
       align-items: center;
       gap: 8px;
-      font-size: 13px;
-      color: var(--muted);
-    }
-    .loader {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      border: 3px solid #eee;
-      border-top-color: var(--accent);
-      animation: spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Layout principal: chat + config */
-    .layout {
-      display: grid;
-      grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.2fr);
-      gap: 16px;
-    }
-    @media (max-width: 900px) {
-      .layout {
-        grid-template-columns: minmax(0, 1fr);
-      }
-    }
-
-    /* Chat */
-    #chat {
-      background: var(--card);
-      border-radius: var(--radius-lg);
-      padding: 16px 16px 12px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-      max-height: 70vh;
-      overflow-y: auto;
-    }
-
-    .msg {
-      display: flex;
-      margin-bottom: 10px;
-    }
-    .msg.user   { justify-content: flex-end; }
-    .msg.assistant { justify-content: flex-start; }
-
-    .bubble {
-      max-width: 100%;
-      padding: 10px 12px;
-      border-radius: 18px;
       font-size: 14px;
-      line-height: 1.45;
-      white-space: normal;
-    }
-    .msg.user .bubble {
-      background: var(--accent);
-      color: #fff;
-      border-bottom-right-radius: 4px;
-    }
-    .msg.assistant .bubble {
-      background: #f3f3f3;
-      color: var(--ink);
-      border-bottom-left-radius: 4px;
+      color: #444;
     }
 
-    .prop-card {
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      padding: 10px 10px 12px;
-      margin-top: 10px;
-      background: #fff;
-      display: grid;
-      grid-template-columns: 120px minmax(0, 1fr);
-      gap: 10px;
-      font-size: 13px;
+    .loader {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 3px solid #ddd;
+      border-top-color: #006CFF;
+      animation: spin 0.8s linear infinite;
     }
-    .prop-card img {
-      width: 100%;
-      height: 90px;
-      object-fit: cover;
-      border-radius: 10px;
-      background: #eaeaea;
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
-    .prop-meta {
+
+    /* Chat bubble for user query */
+    .bubble {
+      display: inline-block;
+      background: #dbe8ff;
+      color: #00327d;
+      padding: 12px 20px;
+      border-radius: 20px;
+      margin: 20px 0;
+      max-width: 70%;
+      font-size: 16px;
+    }
+
+    /* AI intro text */
+    .intro-block {
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      white-space: pre-line;
+      line-height: 1.5;
+    }
+
+    /* Property card */
+    .card {
+      background: white;
       display: flex;
-      flex-direction: column;
-      gap: 4px;
+      gap: 18px;
+      padding: 18px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      margin-bottom: 16px;
     }
-    .prop-title {
-      font-weight: 600;
-      font-size: 13px;
+
+    .card img {
+      width: 145px;
+      height: 110px;
+      border-radius: 12px;
+      object-fit: cover;
     }
-    .prop-address {
-      color: var(--muted);
-      font-size: 12px;
+
+    .card-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 4px;
     }
-    .prop-price {
-      font-weight: 600;
-      margin-top: 4px;
+
+    .card-price {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 6px 0;
     }
-    .prop-link {
-      margin-top: 4px;
-      font-size: 12px;
-    }
-    .prop-link a {
-      color: var(--accent);
+
+    .link {
+      display: inline-block;
+      margin-top: 6px;
+      color: #006CFF;
       text-decoration: none;
+      font-size: 14px;
     }
-    .prop-link a:hover {
+
+    .link:hover {
       text-decoration: underline;
     }
 
-    /* Panel de configuración */
-    .config {
-      background: var(--card);
-      border-radius: var(--radius-lg);
-      padding: 14px 14px 16px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.04);
-      font-size: 13px;
-    }
-
-    .config-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      cursor: pointer;
-    }
-    .config-header h2 {
-      margin: 0;
-      font-size: 15px;
-    }
-    .config-header span {
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .config-body {
-      margin-top: 10px;
+    /* Config popup */
+    #configModal {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.45);
       display: none;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .config-body.visible { display: flex; }
-
-    .config label {
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .config textarea {
-      width: 100%;
-      min-height: 80px;
-      padding: 8px 10px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      font-size: 12px;
-      resize: vertical;
-      outline: none;
-    }
-    .config textarea:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px var(--accent-soft);
-    }
-
-    .config-actions {
-      margin-top: 6px;
-      display: flex;
-      justify-content: flex-end;
+      justify-content: center;
       align-items: center;
-      gap: 8px;
     }
-    button.secondary {
-      background: #f5f5f5;
-      color: var(--ink);
-      border-radius: var(--radius-pill);
-      border: 1px solid var(--border);
-      padding: 7px 14px;
-      font-size: 12px;
-      cursor: pointer;
+
+    #configContent {
+      background: white;
+      padding: 24px;
+      width: 90%;
+      max-width: 600px;
+      border-radius: 16px;
+      box-shadow: 0 6px 30px rgba(0,0,0,0.2);
     }
-    button.secondary:hover {
-      background: #eeeeee;
+
+    #configContent h2 {
+      margin-top: 0;
     }
-    .save-status {
-      font-size: 11px;
-      color: var(--muted);
+
+    textarea.config-area {
+      width: 100%;
+      min-height: 120px;
+      margin-bottom: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #ccc;
+      font-size: 14px;
     }
   </style>
 </head>
+
 <body>
-  <div class="wrap">
-    <h1>Buscador inmobiliario con IA 🏡</h1>
-    <p class="subtitle">
-      Escribe tu búsqueda como si hablaras con un asesor:
-      <strong>“Quiero 3 pisos en Barcelona para comprar por 300000 euros”</strong>.
-    </p>
+<div class="container">
+  <h1>Buscador inmobiliario con IA 🏡</h1>
+  <div class="subtitle">Escribe tu búsqueda como si hablaras con un asesor.</div>
 
-    <div class="search-box">
-      <textarea id="q" placeholder="Escribe aquí tu consulta inmobiliaria…"></textarea>
-      <div class="actions">
-        <button class="primary" id="btn">Buscar</button>
-        <div id="spinner">
-          <div class="loader"></div>
-          <span>Buscando las mejores oportunidades…</span>
-        </div>
+  <!-- SEARCH -->
+  <div class="search-box">
+    <textarea id="q" placeholder="Ej: Quiero 3 pisos en Barcelona por 300000 euros"></textarea>
+
+    <div class="actions">
+      <button class="primary" id="btn">Buscar</button>
+
+      <div style="display:flex;align-items:center;">
+        <button class="config-btn" onclick="openConfig()">⚙️ Configuración</button>
+        <div id="spinner"><div class="loader"></div> Buscando…</div>
       </div>
-    </div>
-
-    <div class="layout">
-      <!-- Chat -->
-      <div id="chat"></div>
-
-      <!-- Panel de configuración de prompts -->
-      <aside class="config">
-        <div class="config-header" id="toggleConfig">
-          <div>
-            <h2>⚙️ Configuración de prompts</h2>
-            <span>Ajusta el tono del asesor y el resumen final.</span>
-          </div>
-          <div style="font-size:18px;">▸</div>
-        </div>
-
-        <div class="config-body" id="configBody">
-          <div>
-            <label for="promptIntro">Prompt de sistema (tono del asesor):</label>
-            <textarea id="promptIntro"></textarea>
-          </div>
-          <div>
-            <label for="promptSummary">Prompt para explicar resultados:</label>
-            <textarea id="promptSummary"></textarea>
-          </div>
-          <div class="config-actions">
-            <span class="save-status" id="saveStatus"></span>
-            <button class="secondary" id="resetPrompts">Restablecer</button>
-            <button class="primary" id="savePrompts" style="padding:7px 16px;font-size:12px;">Guardar</button>
-          </div>
-        </div>
-      </aside>
     </div>
   </div>
 
-  <script>
-    console.log("UI inmobiliaria cargada");
+  <!-- OUTPUT -->
+  <div id="output"></div>
+</div>
 
-    const input   = document.getElementById("q");
-    const button  = document.getElementById("btn");
-    const chat    = document.getElementById("chat");
-    const spinner = document.getElementById("spinner");
+<!-- POPUP CONFIG -->
+<div id="configModal">
+  <div id="configContent">
+    <h2>Configuración de prompts</h2>
+    <label>Prompt del asesor:</label>
+    <textarea id="cfg_intro" class="config-area"></textarea>
 
-    const toggleConfig = document.getElementById("toggleConfig");
-    const configBody   = document.getElementById("configBody");
-    const promptIntro  = document.getElementById("promptIntro");
-    const promptSummary= document.getElementById("promptSummary");
-    const savePrompts  = document.getElementById("savePrompts");
-    const resetPrompts = document.getElementById("resetPrompts");
-    const saveStatus   = document.getElementById("saveStatus");
+    <label>Prompt de resumen final:</label>
+    <textarea id="cfg_summary" class="config-area"></textarea>
 
-    function setSpinner(visible) {
-      spinner.style.display = visible ? "flex" : "none";
-    }
+    <button class="primary" onclick="saveConfig()">Guardar</button>
+    <button class="config-btn" onclick="closeConfig()">Cerrar</button>
+  </div>
+</div>
 
-    function escapeHtml(str) {
-      return str.replace(/[&<>"']/g, function (c) {
-        return ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;',
-        })[c];
-      });
-    }
+<script>
+/* -------------------- CONFIG POPUP -------------------- */
+function openConfig() {
+  document.getElementById("configModal").style.display = "flex";
+}
 
-    function addMessage(role, html) {
-      const msg = document.createElement("div");
-      msg.className = "msg " + role;
+function closeConfig() {
+  document.getElementById("configModal").style.display = "none";
+}
 
-      const bubble = document.createElement("div");
-      bubble.className = "bubble";
-      bubble.innerHTML = html;
+function saveConfig() {
+  localStorage.setItem("cfg_intro", document.getElementById("cfg_intro").value);
+  localStorage.setItem("cfg_summary", document.getElementById("cfg_summary").value);
+  closeConfig();
+}
 
-      msg.appendChild(bubble);
-      chat.appendChild(msg);
-      chat.scrollTop = chat.scrollHeight;
-    }
+/* Load config values */
+window.onload = () => {
+  document.getElementById("cfg_intro").value = localStorage.getItem("cfg_intro") || "";
+  document.getElementById("cfg_summary").value = localStorage.getItem("cfg_summary") || "";
+};
 
-    function formatNumber(num) {
-      try {
-        return num.toLocaleString("es-ES");
-      } catch {
-        return String(num);
-      }
-    }
+/* -------------------- SEARCH LOGIC -------------------- */
+const btn = document.getElementById("btn");
+const output = document.getElementById("output");
 
-    async function callBuscar(q) {
-      const url = "/buscar?q=" + encodeURIComponent(q);
-      console.log("Llamando a:", url);
+btn.addEventListener("click", async () => {
+  const q = document.getElementById("q").value.trim();
+  if (!q) return;
 
-      setSpinner(true);
-      try {
-        const res = await fetch(url);
-        const data = await res.json().catch(() => null);
+  output.innerHTML = "";
+  showUserBubble(q);
+  showSpinner(true);
 
-        if (!res.ok) {
-          const detail = data && data.detail ? data.detail : ("HTTP " + res.status);
-          addMessage("assistant", "❌ Hubo un problema al buscar pisos:<br>" + escapeHtml(detail));
-          return;
-        }
+  try {
+    const res = await fetch("/buscar?q=" + encodeURIComponent(q));
+    const text = await res.text();
 
-        if (data && data.error === "missing_info") {
-          addMessage(
-            "assistant",
-            escapeHtml(data.message || "Me faltan datos para poder buscar bien.")
-              .replace(/\n/g, "<br>")
-          );
-          return;
-        }
+    showSpinner(false);
 
-        if (!data) {
-          addMessage("assistant", "⚠️ La API no devolvió contenido.");
-          return;
-        }
+    let data;
+    try { data = JSON.parse(text); }
+    catch { output.innerHTML += "<div>Error: respuesta no válida</div>"; return;}
 
-        // Intro tipo ChatGPT
-        if (data.intro) {
-          addMessage("assistant", escapeHtml(data.intro).replace(/\n/g, "<br>"));
-        }
+    renderIntro(data.intro);
+    renderProperties(data.properties);
+  }
+  catch(e) {
+    showSpinner(false);
+    output.innerHTML += "<div>Error llamando al servidor</div>";
+  }
+});
 
-        const props = data.properties || [];
+/* -------------------- UI HELPERS -------------------- */
+function showSpinner(show) {
+  document.getElementById("spinner").style.display = show ? "flex" : "none";
+}
 
-        if (props.length) {
-          let htmlProps = "";
-          props.forEach((p, idx) => {
-            const title   = escapeHtml(p.title || ("Propiedad " + (idx + 1)));
-            const address = escapeHtml(p.address || "");
-            const typ     = escapeHtml(p.typology || "");
-            const op      = escapeHtml(p.operation || "");
-            const price   = typeof p.price === "number" ? formatNumber(p.price) + " €" : "Precio no disponible";
-            const url     = p.url || "";
-            const photo   = p.photo || "";
-            const rentEst = p.rent_estimate;
+function showUserBubble(text) {
+  output.innerHTML += `<div class="bubble">${text}</div>`;
+}
 
-            htmlProps += `
-              <div class="prop-card">
-                <div>
-                  ${photo ? `<img src="${photo}" alt="Foto propiedad">` : `<div style="width:100%;height:90px;border-radius:10px;background:#e0e0e0;"></div>`}
-                </div>
-                <div class="prop-meta">
-                  <div class="prop-title">#${idx + 1} · ${title}</div>
-                  <div class="prop-address">${address}</div>
-                  <div class="prop-price">${price} · ${op} · ${typ}</div>
-                  <div class="prop-link">
-                    ${url ? `🔗 <a href="${url}" target="_blank" rel="noopener noreferrer">Ver anuncio en Idealista</a>` : ""}
-                  </div>
-                  ${rentEst ? `<div style="font-size:11px;color:#666;">📊 Estimación de alquiler: ~${formatNumber(rentEst)} €/mes (4% rentabilidad bruta)</div>` : ""}
-                </div>
-              </div>
-            `;
-          });
+function renderIntro(intro) {
+  output.innerHTML += `<div class="intro-block">${intro}</div>`;
+}
 
-          addMessage("assistant", htmlProps);
-        } else {
-          addMessage(
-            "assistant",
-            "No he encontrado propiedades que encajen claramente con esta búsqueda. " +
-            "Prueba a ampliar la zona o el presupuesto."
-          );
-        }
+function renderProperties(list) {
+  list.forEach(p => {
+    output.innerHTML += `
+      <div class="card">
+        <img src="${p.photo}" alt="">
+        <div>
+          <div class="card-title">#${p.rank} · ${p.title}</div>
+          <div>${p.address}</div>
+          <div class="card-price">${p.price.toLocaleString()} € · ${p.operation} · ${p.typology}</div>
 
-        if (data.summary) {
-          addMessage("assistant", escapeHtml(data.summary).replace(/\n/g, "<br>"));
-        }
+          <a class="link" href="${p.url}" target="_blank">🔗 Ver anuncio en Idealista</a>
 
-      } catch (e) {
-        console.error("Error llamando a /buscar:", e);
-        addMessage("assistant", "❌ Error llamando al servidor:<br>" + escapeHtml(String(e)));
-      } finally {
-        setSpinner(false);
-      }
-    }
+          <div style="margin-top:6px;font-size:14px;color:#777;">
+            Estimación alquiler: ~${p.rent_estimate} €/mes
+          </div>
+        </div>
+      </div>
+    `;
+  });
+}
+</script>
 
-    // Botón buscar
-    button.addEventListener("click", async () => {
-      const q = (input.value || "").trim();
-      if (!q) {
-        addMessage("assistant", "Escribe una consulta primero 😊");
-        return;
-      }
-      addMessage("user", escapeHtml(q));
-      await callBuscar(q);
-    });
-
-    // Ctrl+Enter / Cmd+Enter para enviar
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-        button.click();
-      }
-    });
-
-    // ----- Configuración de prompts -----
-    toggleConfig.addEventListener("click", () => {
-      const visible = configBody.classList.toggle("visible");
-      toggleConfig.querySelector("div:last-child").textContent = visible ? "▾" : "▸";
-    });
-
-    async function loadPrompts() {
-      try {
-        const res = await fetch("/prompts");
-        if (!res.ok) return;
-        const data = await res.json();
-        promptIntro.value   = data.intro   || "";
-        promptSummary.value = data.summary || "";
-      } catch (e) {
-        console.warn("No se pudieron cargar los prompts:", e);
-      }
-    }
-
-    savePrompts.addEventListener("click", async () => {
-      saveStatus.textContent = "Guardando…";
-      try {
-        const res = await fetch("/prompts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            intro: promptIntro.value,
-            summary: promptSummary.value,
-          }),
-        });
-        if (!res.ok) {
-          saveStatus.textContent = "Error al guardar";
-          return;
-        }
-        saveStatus.textContent = "Guardado ✔️";
-        setTimeout(() => (saveStatus.textContent = ""), 2000);
-      } catch (e) {
-        console.error(e);
-        saveStatus.textContent = "Error al guardar";
-      }
-    });
-
-    resetPrompts.addEventListener("click", async () => {
-      await loadPrompts();
-      saveStatus.textContent = "Restablecido";
-      setTimeout(() => (saveStatus.textContent = ""), 1500);
-    });
-
-    // Cargar prompts y mensaje inicial
-    loadPrompts();
-    addMessage(
-      "assistant",
-      "Hola 👋 Soy tu asistente inmobiliario con IA. Cuéntame qué buscas, por ejemplo:<br>" +
-      "<em>“Quiero 3 pisos en Barcelona para comprar por 300000 euros”</em>."
-    );
-  </script>
 </body>
 </html>
